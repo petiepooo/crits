@@ -43,6 +43,8 @@ from crits.services.analysis_result import AnalysisResult
 from crits.services.handlers import run_triage, get_supported_services
 from crits.stats.handlers import generate_yara_hits
 
+from crits.vocabulary.relationships import RelationshipTypes
+
 logger = logging.getLogger(__name__)
 
 
@@ -512,7 +514,8 @@ def unzip_file(filename, user=None, password=None, data=None, source=None,
                method='Zip', reference='', campaign=None, confidence='low',
                related_md5=None, related_id=None, related_type='Sample',
                bucket_list=None, ticket=None, inherited_source=None,
-               backdoor_name=None, backdoor_version=None):
+               is_return_only_md5=True, backdoor_name=None,
+               backdoor_version=None):
     """
     Unzip a file.
 
@@ -547,6 +550,8 @@ def unzip_file(filename, user=None, password=None, data=None, source=None,
     :param inherited_source: Source(s) to be inherited by the new Sample
     :type inherited_source: list, :class:`crits.core.crits_mongoengine.EmbeddedSource`
     :param backdoor_name: Name of backdoor to relate this object to.
+    :type is_return_only_md5: str
+    :param is_return_only_md5: Only return the MD5s.
     :type backdoor_name: str
     :param backdoor_version: Version of backdoor to relate this object to.
     :type backdoor_version: str
@@ -602,9 +607,9 @@ def unzip_file(filename, user=None, password=None, data=None, source=None,
             raise ZipFileError, "Unzip process failed to terminate"
         else:
             if related_md5 and related_md5 == zip_md5:
-                relationship = "Compressed_Into"
+                relationship = RelationshipTypes.COMPRESSED_INTO
             else:
-                relationship = "Related_To"
+                relationship = RelationshipTypes.RELATED_TO
             for root, dirs, files in os.walk(extractdir):
                 for filename in files:
                     filepath = extractdir + "/" + filename
@@ -620,6 +625,7 @@ def unzip_file(filename, user=None, password=None, data=None, source=None,
                                              ticket=ticket,
                                              inherited_source=inherited_source,
                                              relationship=relationship,
+                                             is_return_only_md5=is_return_only_md5,
                                              backdoor_name=backdoor_name,
                                              backdoor_version=backdoor_version)
                     if new_sample:
@@ -644,6 +650,7 @@ def unrar_file(filename, user=None, password=None, data=None, source=None,
                method="Generic", reference='', campaign=None, confidence='low',
                related_md5=None, related_id=None, related_type='Sample',
                bucket_list=None, ticket=None, inherited_source=None,
+               is_return_only_md5=True,
                backdoor_name=None, backdoor_version=None):
     """
     Unrar a file.
@@ -678,6 +685,8 @@ def unrar_file(filename, user=None, password=None, data=None, source=None,
     :type ticket: str
     :param inherited_source: Source(s) to be inherited by the new Sample
     :type inherited_source: list, :class:`crits.core.crits_mongoengine.EmbeddedSource`
+    :param is_return_only_md5: Only return the MD5s.
+    :type is_return_only_md5: bool
     :returns: list
     :raises: ZipFileError, Exception
     """
@@ -724,9 +733,9 @@ def unrar_file(filename, user=None, password=None, data=None, source=None,
             raise ZipFileError, "Unrar process failed to terminate"
         else:
             if related_md5 and related_md5 == rar_md5:
-                relationship = "Compressed_Into"
+                relationship = RelationshipTypes.COMPRESSED_INTO
             else:
-                relationship = "Related_To"
+                relationship = RelationshipTypes.RELATED_TO
             for root, dirs, files in os.walk(rardir):
                 for filename in files:
                     filepath = os.path.join(rardir, filename)
@@ -745,6 +754,7 @@ def unrar_file(filename, user=None, password=None, data=None, source=None,
                                                      ticket=ticket,
                                                      inherited_source=inherited_source,
                                                      relationship=relationship,
+                                                     is_return_only_md5=is_return_only_md5,
                                                      backdoor_name=backdoor_name,
                                                      backdoor_version=backdoor_version)
                             samples.append(new_sample)
@@ -960,7 +970,7 @@ def handle_file(filename, data, source, method='Generic', reference='', related_
                                         source__name__in=sources).first()
             if backdoor:
                 backdoor.add_relationship(sample,
-                                          "Related_To",
+                                          RelationshipTypes.RELATED_TO,
                                           analyst=user)
                 backdoor.save()
             # Also relate to the specific instance backdoor.
@@ -970,7 +980,7 @@ def handle_file(filename, data, source, method='Generic', reference='', related_
                                             source__name__in=sources).first()
                 if backdoor:
                     backdoor.add_relationship(sample,
-                                              "Related_To",
+                                              RelationshipTypes.RELATED_TO,
                                               analyst=user)
                     backdoor.save()
 
@@ -988,9 +998,9 @@ def handle_file(filename, data, source, method='Generic', reference='', related_
             if related_obj.id != sample.id: #don't form relationship to itself
                 if not relationship:
                     if related_obj._meta['crits_type'] == 'Email':
-                        relationship = "Contained_Within"
+                        relationship = RelationshipTypes.CONTAINED_WITHIN
                     else:
-                        relationship = "Related_To"
+                        relationship = RelationshipTypes.RELATED_TO
                 sample.add_relationship(related_obj,
                                         relationship,
                                         analyst=user,
@@ -1135,6 +1145,7 @@ def handle_uploaded_file(f, source, method='', reference='', file_format=None,
             bucket_list=bucket_list,
             ticket=ticket,
             inherited_source=inherited_source,
+            is_return_only_md5=is_return_only_md5,
             backdoor_name=backdoor_name,
             backdoor_version=backdoor_version)
     elif file_format == "rar" and f:
@@ -1154,6 +1165,7 @@ def handle_uploaded_file(f, source, method='', reference='', file_format=None,
             bucket_list=bucket_list,
             ticket=ticket,
             inherited_source=inherited_source,
+            is_return_only_md5=is_return_only_md5,
             backdoor_name=backdoor_name,
             backdoor_version=backdoor_version)
     else:
